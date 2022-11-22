@@ -25,10 +25,14 @@ npm run watch
 ## Example
 
 ```javascript
-import {start_ws} from 'websock-lt'
+import {start_ws, send_ws_msg} from 'websock-lt'
 
 const port = 9000;
 start_ws(port, ((new_data) => {
     console.log("New data coming from WS", new_data);
+
+    send_ws_msg({
+        msg: "Msg to send via websocket"
+    });
 }));
 ```
