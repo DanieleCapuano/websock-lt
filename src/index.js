@@ -31,13 +31,12 @@ function _connect_to_ws(port, callback, resolve) {
         };
 
         if (last_msg) {
-            _call_cb(last_msg);
-            _send_ws_msg(last_msg);
+            _restore_last_message();
         }
         connection.addEventListener('message', function (message) {
             let data = message.utf8Data || message.data;
             if (CONFIG._DEBUG_) console.log("Received: '" + data + "'");
-            if (CONFIG.preserve_last_message) last_msg = data;
+            if (CONFIG.preserve_last_message) _save_last_msg(data);
             _call_cb(data);
         });
 
@@ -80,6 +79,32 @@ function _send_ws_msg(data) {
     );
 
     if (CONFIG._DEBUG_) console.info("MSG", msg);
-    if (CONFIG.preserve_last_message) last_msg = data;
+    if (CONFIG.preserve_last_message) _save_last_msg(data);
     connection.send(msg);
+}
+
+function _save_last_msg(data) {
+    if (CONFIG.preserve_last_message) {
+        let c = CONFIG.preserve_last_message;
+        if (c.id) {
+            //we want the last message(s) to be indexed by id
+            last_msg = last_msg || {};
+
+            //the client can transform the saved message so that, if recovered, it could be sent with changes
+            //(it's a recovery message, so maybe it should not have the same information, e.g. timing, of the original one)
+            last_msg[data[c.id]] = (c.transform_msg || (m => m))(data);
+        }
+        else last_msg = data;
+    }
+}
+
+function _restore_last_message() {
+    const c = CONFIG.preserve_last_message,
+        _send = (d) => {
+            _call_cb(d);
+            _send_ws_msg(d);
+        };
+
+    if (c.id) Object.keys(last_msg).forEach(last_msg_id => _send(last_msg[last_msg_id]));
+    else _send(last_msg);
 }
