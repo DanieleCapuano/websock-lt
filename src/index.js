@@ -31,7 +31,7 @@ function _connect_to_ws(port, callback, resolve) {
         };
 
         if (last_msg) {
-            _restore_last_message();
+            _restore_last_message(_call_cb);
         }
         connection.addEventListener('message', function (message) {
             let data = message.utf8Data || message.data;
@@ -98,10 +98,10 @@ function _save_last_msg(data) {
     }
 }
 
-function _restore_last_message() {
+function _restore_last_message(fn) {
     const c = CONFIG.preserve_last_message,
         _send = (d) => {
-            _call_cb(d);
+            fn && fn(d);
             _send_ws_msg(d);
         };
 
