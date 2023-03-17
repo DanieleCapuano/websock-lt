@@ -2,11 +2,16 @@ export const start_ws = _start_ws;
 export const send_ws_msg = _send_ws_msg;
 
 let connection = null,
-    retry_itv = null;
+    retry_itv = null,
+    last_msg = null;
+
 const CONFIG = window.CONFIG || {};
 
-function _start_ws(port, callback) {
+function _start_ws(opts) {
+    const { port, callback, preserve_last_message } = opts;
     port = port || '6789';
+    CONFIG.preserve_last_message = preserve_last_message;
+
     return new Promise((resolve) => {
         try {
             _connect_to_ws(port, callback, resolve);
@@ -21,11 +26,16 @@ function _connect_to_ws(port, callback, resolve) {
     connection = new WebSocket('ws://localhost:' + port);
     connection.addEventListener('open', function () {
         console.info('WebSocket Client Connected');
+        const _call_cb = (d) => {
+            callback && callback(JSON.parse(d));
+        };
 
+        last_msg && _call_cb(last_msg);
         connection.addEventListener('message', function (message) {
             let data = message.utf8Data || message.data;
             if (CONFIG._DEBUG_) console.log("Received: '" + data + "'");
-            callback && callback(JSON.parse(data));
+            if (CONFIG.preserve_last_message) last_msg = data;
+            _call_cb(data);
         });
 
         resolve && resolve(connection);
@@ -49,7 +59,7 @@ function _connect_to_ws(port, callback, resolve) {
                     return;
                 }
                 _connect_to_ws(port, callback, resolve);
-            }, 3000);   
+            }, 3000);
         }
     });
 }
@@ -67,5 +77,6 @@ function _send_ws_msg(data) {
     );
 
     if (CONFIG._DEBUG_) console.info("MSG", msg);
+    if (CONFIG.preserve_last_message) last_msg = msg;
     connection.send(msg);
 }
