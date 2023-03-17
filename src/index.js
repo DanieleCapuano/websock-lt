@@ -30,7 +30,10 @@ function _connect_to_ws(port, callback, resolve) {
             callback && callback(JSON.parse(d));
         };
 
-        last_msg && _call_cb(last_msg);
+        if (last_msg) {
+            _call_cb(last_msg);
+            _send_ws_msg(last_msg);
+        }
         connection.addEventListener('message', function (message) {
             let data = message.utf8Data || message.data;
             if (CONFIG._DEBUG_) console.log("Received: '" + data + "'");
@@ -77,6 +80,6 @@ function _send_ws_msg(data) {
     );
 
     if (CONFIG._DEBUG_) console.info("MSG", msg);
-    if (CONFIG.preserve_last_message) last_msg = msg;
+    if (CONFIG.preserve_last_message) last_msg = data;
     connection.send(msg);
 }
