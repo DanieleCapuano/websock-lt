@@ -8,6 +8,7 @@ let connection = null,
 const CONFIG = window.CONFIG || {};
 
 function _start_ws(opts) {
+    opts = opts || {};
     let { port, callback, preserve_last_message } = opts;
     port = port || '6789';
     CONFIG.preserve_last_message = preserve_last_message;
