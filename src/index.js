@@ -1,7 +1,7 @@
 export const start_ws = _start_ws;
 export const send_ws_msg = _send_ws_msg;
 
-let connection = null,
+let connections = {},
     retry_itv = null,
     last_msg = null;
 
@@ -22,11 +22,14 @@ function _start_ws(opts) {
     });
 }
 
-function _connect_to_ws(port, callback, resolve) {
+function _connect_to_ws(port, callback, resolve, conn_id) {
     console.info("Connecting to websocket...");
-    connection = new WebSocket('ws://localhost:' + port);
+    let connection = new WebSocket('ws://localhost:' + port),
+        connection_id = conn_id || (new Date()).getTime();
+
+    connections[connection_id] = connection;
     connection.addEventListener('open', function () {
-        console.info('WebSocket Client Connected');
+        console.info('WebSocket Client Connected to port ' + port);
         const _call_cb = (d) => {
             callback && callback(JSON.parse(d));
         };
@@ -37,7 +40,7 @@ function _connect_to_ws(port, callback, resolve) {
         connection.addEventListener('message', function (message) {
             let data = message.utf8Data || message.data;
             if (CONFIG._DEBUG_) console.log("Received: '" + data + "'");
-            if (CONFIG.preserve_last_message) _save_last_msg(data);
+            if (CONFIG.preserve_last_message) _save_last_msg(data, connection);
             _call_cb(data);
         });
 
@@ -47,6 +50,7 @@ function _connect_to_ws(port, callback, resolve) {
     connection.addEventListener('error', function (error) {
         if (CONFIG._DEBUG_) console.log("Connection Error: " + error.toString());
         connection = null;
+        connections[connection_id] = null;
         resolve && resolve();
     });
 
@@ -54,24 +58,28 @@ function _connect_to_ws(port, callback, resolve) {
     connection.addEventListener('close', function () {
         console.warn('Websocket Connection Closed');
         connection = null;
-        if (!retry_itv) {
-            retry_itv = setInterval(() => {
-                if (connection) {
-                    clearInterval(retry_itv);
-                    retry_itv = null;
+        connections[connection_id] = null;
+
+        if (!(retry_itv || {})[connection_id]) {
+            retry_itv = retry_itv || {};
+            retry_itv[connection_id] = setInterval(() => {
+                if (connections[connection_id]) {
+                    clearInterval(retry_itv[connection_id]);
+                    retry_itv[connection_id] = null;
                     return;
                 }
-                _connect_to_ws(port, callback, resolve);
+                _connect_to_ws(port, callback, resolve, connection_id);
             }, 3000);
         }
     });
 }
 
 let warning_message_given = false;
-function _send_ws_msg(data) {
-    if (!(connection || {}).readyState) {
+function _send_ws_msg(data, conn) {
+    let conn_ids = Object.keys(connections);
+    if (!((conn || connections[conn_ids[0]]) || {}).readyState) {
         if (!warning_message_given) //give it just once
-            console.warn("No WS Connection available: No color sent");
+            console.warn("No WS Connection available: No Message sent");
         warning_message_given = true;
         return;
     }
@@ -80,11 +88,11 @@ function _send_ws_msg(data) {
     );
 
     if (CONFIG._DEBUG_) console.info("MSG", msg);
-    if (CONFIG.preserve_last_message) _save_last_msg(data);
-    connection.send(msg);
+    if (CONFIG.preserve_last_message) _save_last_msg(data, conn);
+    (conn || connections[conn_ids[0]]).send(msg);
 }
 
-function _save_last_msg(data) {
+function _save_last_msg(data, conn) {
     if (CONFIG.preserve_last_message) {
         let c = CONFIG.preserve_last_message;
         if (c.id) {
@@ -93,17 +101,25 @@ function _save_last_msg(data) {
 
             //the client can transform the saved message so that, if recovered, it could be sent with changes
             //(it's a recovery message, so maybe it should not have the same information, e.g. timing, of the original one)
-            last_msg[data[c.id]] = (c.transform_msg || (m => m))(data);
+            last_msg[data[c.id]] = {
+                conn,
+                msg: (c.transform_msg || (m => m))(data)
+            };
         }
-        else last_msg = data;
+        else {
+            last_msg = {
+                conn,
+                msg: data
+            };
+        }
     }
 }
 
 function _restore_last_message(fn) {
     const c = CONFIG.preserve_last_message,
         _send = (d) => {
-            fn && fn(d);
-            _send_ws_msg(d);
+            fn && fn(d.msg, d.conn);
+            _send_ws_msg(d.msg, d.conn);
         };
 
     if (c.id) Object.keys(last_msg).forEach(last_msg_id => _send(last_msg[last_msg_id]));
