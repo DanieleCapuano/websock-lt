@@ -1,7 +1,9 @@
 export const start_ws = _start_ws;
 export const send_ws_msg = _send_ws_msg;
+export const set_default_connection = _set_default_conn;
 
 let connections = {},
+    default_conn = null,
     retry_itv = null,
     last_msg = null;
 
@@ -74,10 +76,14 @@ function _connect_to_ws(port, callback, resolve, conn_id) {
     });
 }
 
+function _set_default_conn(conn) {
+    default_conn = conn;
+}
+
 let warning_message_given = false;
 function _send_ws_msg(data, conn) {
     let conn_ids = Object.keys(connections);
-    if (!((conn || connections[conn_ids[0]]) || {}).readyState) {
+    if (!((conn || default_conn || connections[conn_ids[0]]) || {}).readyState) {
         if (!warning_message_given) //give it just once
             console.warn("No WS Connection available: No Message sent");
         warning_message_given = true;
