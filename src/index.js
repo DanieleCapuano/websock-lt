@@ -82,8 +82,9 @@ function _set_default_conn(conn) {
 
 let warning_message_given = false;
 function _send_ws_msg(data, conn) {
-    let conn_ids = Object.keys(connections);
-    if (!((conn || default_conn || connections[conn_ids[0]]) || {}).readyState) {
+    let conn_ids = Object.keys(connections),
+        connection = conn || default_conn || connections[conn_ids[0]] || { send: () => 'fake_connection' };
+    if (!connection.readyState) {
         if (!warning_message_given) //give it just once
             console.warn("No WS Connection available: No Message sent");
         warning_message_given = true;
@@ -92,10 +93,10 @@ function _send_ws_msg(data, conn) {
     let msg = JSON.stringify(
         data
     );
+    connection.send(msg);
 
     if (CONFIG._DEBUG_) console.info("MSG", msg);
-    if (CONFIG.preserve_last_message) _save_last_msg(data, conn);
-    (conn || connections[conn_ids[0]]).send(msg);
+    if (CONFIG.preserve_last_message) _save_last_msg(data, connection);
 }
 
 function _save_last_msg(data, conn) {
